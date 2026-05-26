@@ -1,0 +1,50 @@
+name: Scraper
+
+on:
+  schedule:
+    - cron: '30 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "nogikoi-scraper"
+  cancel-in-progress: false
+
+jobs:
+  scraper-and-deploy:
+    runs-on: ubuntu-latest
+    outputs:
+      has_changes: ${{ steps.check_changes.outputs.changed }}
+    steps:
+      - name: Clone private repo
+        env:
+          PAT: ${{ secrets.PAT }}
+        run: |
+          git clone https://x-access-token:${PAT}@github.com/iamCristYE/nogikoi-ranking
+          cd nogikoi-ranking
+          ls
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Run scraper
+        run: |
+          pip install requests
+          python ranking.py
+        working-directory: ./nogikoi-ranking
+
+      - name: Wait and Trigger Self
+        if: always() # Keeps the loop going regardless of current run status
+        env:
+          GH_TOKEN: ${{ secrets.PAT }}
+        run: |
+          echo "Waiting 600 seconds..."
+          sleep 600
+          echo "Triggering next run..."
+          gh workflow run scraper.yml --repo iamCristYE/nogikoi-ranking-public
